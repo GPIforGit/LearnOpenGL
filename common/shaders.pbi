@@ -1,12 +1,12 @@
 ﻿; changes
-; - merge of the shader_m.h and shader_s.h
+; - merge of the shader.h, shader_m.h and shader_s.h 
 ; - delete() for cleanup
 
 DeclareModule Shader
   EnableExplicit
   
   ; read the shader files, compile and link. Return ProgrammId
-  Declare.l new(vertexPath.s, fragmentPath.s)
+  Declare.l new(vertexPath.s, fragmentPath.s, geometryPath.s="")
   
   ; use programm
   Declare Use(id)
@@ -97,11 +97,11 @@ Module Shader
     gl::DeleteProgram(id)
   EndProcedure  
      
-  Procedure.l new(vertexPath.s, fragmentPath.s)
+  Procedure.l new(vertexPath.s, fragmentPath.s, geometryPath.s="")
     Protected.l id
     ;1. retrieve the vertex/fragment source code from filePath
     Protected in
-    Protected *vShaderCode, *fShaderCode
+    Protected *vShaderCode, *fShaderCode, *gShaderCode
     in = ReadFile(#PB_Any, vertexPath)
     If in
       *vShaderCode = AllocateMemory( Lof(in) +1) ; add a zero at the end
@@ -126,7 +126,21 @@ Module Shader
       CallDebugger
     EndIf
     
-    Protected.l vertex, fragment
+    If geometryPath<>""
+      in = ReadFile(#PB_Any, geometryPath)
+      If in
+        *gShaderCode = AllocateMemory( Lof(in)+1 ); add a zero at the end
+        ReadData(in, *gShaderCode, Lof(in) )
+        ;PokeB(*vShaderCode + Lof(in),#LF) ; add a line-end-marker
+        CloseFile(in)
+      Else
+        Debug "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ"
+        Debug geometryPath
+        CallDebugger
+      EndIf
+    EndIf
+        
+    Protected.l vertex, fragment, geometry
     ; vertex shader
     vertex = gl::CreateShader(GL::#VERTEX_SHADER)
     gl::ShaderSource(vertex, 1, @ *vShaderCode, #Null)
@@ -137,18 +151,34 @@ Module Shader
     gl::ShaderSource(fragment, 1, @ *fShaderCode, #Null)
     gl::CompileShader(fragment)
     _checkCompileErrors(fragment, "FRAGMENT",fragmentPath)
+    ; if geometry shader is given, compile geometry shader
+    If *gShaderCode
+      geometry = gl::CreateShader(gl::#GEOMETRY_SHADER)
+      gl::ShaderSource(geometry, 1, @ *gShaderCode, #Null)
+      gl::CompileShader(geometry)
+      _checkCompileErrors(geometry, "GEOMETRY", geometryPath)
+    EndIf    
     ; shader Program
     ID = gl::CreateProgram()
     gl::AttachShader(ID, vertex)
     gl::AttachShader(ID, fragment)
+    If *gShaderCode
+      gl::AttachShader(ID, geometry)
+    EndIf
     gl::LinkProgram(ID)
     _checkCompileErrors(ID, "PROGRAM")
     ; delete the shaders as they're linked into our program now and no longer necessary
     gl::DeleteShader(vertex)
     gl::DeleteShader(fragment)
+    If *gShaderCode
+      gl::DeleteShader(geometry)
+    EndIf
     
     FreeMemory(*fShaderCode)
     FreeMemory(*vShaderCode)
+    If *gShaderCode
+      FreeMemory(*gShaderCode)
+    EndIf
     
     ProcedureReturn id
   EndProcedure
@@ -173,7 +203,3 @@ Module Shader
   EndProcedure
   
 EndModule
-; IDE Options = PureBasic 5.73 LTS (Windows - x64)
-; CursorPosition = 5
-; Folding = ----
-; EnableXP

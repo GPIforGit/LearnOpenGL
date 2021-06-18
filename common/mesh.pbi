@@ -32,6 +32,12 @@ DeclareModule Mesh
   ; render the mesh - shader must be active before this call!
   Declare Draw(*mesh, shader.l)
   
+  ; render the mesh (instanced version) - shader must be active before this call!
+  Declare DrawInstanced(*mesh, shader.l, instancecount.l)  
+  
+  ; bind the vao of the mesh for additional attributes
+  Declare BindVertexArray(*mesh)
+  
 EndDeclareModule
 
 Module Mesh
@@ -46,6 +52,13 @@ Module Mesh
   
   ; setup the mesh als own VAO 
   Declare _setupMesh(*mesh.sMesh, *vertices.Vertex, verticesSize.l, *indices.long, indicesSize.l)
+  
+  ; activate textures
+  Declare _ActivateTextures(*mesh.sMesh, shader.l)
+  
+  Procedure BindVertexArray(*mesh.sMesh)
+    gl::BindVertexArray(*mesh\VAO)
+  EndProcedure
   
   Procedure.i new(*vertices.vertex, verticesSize.l, *indices.long, indicesSize.l, *textures.mesh::Texture, texturesSize.l )
     Protected.sMesh *ret = AllocateStructure(sMesh)
@@ -79,7 +92,7 @@ Module Mesh
     FreeStructure( *mesh )    
   EndProcedure
   
-  Procedure Draw(*mesh.sMesh, shader.l)
+  Procedure _ActivateTextures(*mesh.sMesh,shader.l)
     ; bind appropriate textures
     Protected.l diffuseNb  = 0
     Protected.l specularNb = 0
@@ -117,6 +130,10 @@ Module Mesh
             
       *cTexture + SizeOf(texture)
     Next
+  EndProcedure
+  
+  Procedure Draw(*mesh.sMesh, shader.l)
+    _ActivateTextures(*mesh, shader)
     
     ; draw mesh
     gl::BindVertexArray(*mesh\VAO)
@@ -127,6 +144,20 @@ Module Mesh
     gl::ActiveTexture(GL::#TEXTURE0)
             
   EndProcedure
+  
+  Procedure DrawInstanced(*mesh.sMesh, shader.l, instancecount.l)
+    _ActivateTextures(*mesh, shader)
+    
+    ; draw mesh
+    gl::BindVertexArray(*mesh\VAO)
+    gl::DrawElementsInstanced(GL::#TRIANGLES, *mesh\indicesSize , GL::#UNSIGNED_INT, 0, instancecount)
+    gl::BindVertexArray(0)      
+        
+    ;always good practice zo set everything back zo defaults once configured.
+    gl::ActiveTexture(GL::#TEXTURE0)
+            
+  EndProcedure
+  
   
   Procedure _setupMesh(*mesh.sMesh, *vertices.Vertex, verticesSize.l, *indices.long, indicesSize.l)   
     ; create buffers/arrays
@@ -168,8 +199,3 @@ Module Mesh
   
   
 EndModule
-; IDE Options = PureBasic 5.73 LTS (Windows - x64)
-; CursorPosition = 124
-; FirstLine = 130
-; Folding = --
-; EnableXP

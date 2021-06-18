@@ -23,12 +23,14 @@ DeclareModule window
   EndMacro
   
   ; check, if the Program should quit - for example when the user close the window
-  Declare.l WindowShouldClose()
-  Declare SetWindowShouldClose(state.l)
+  Declare.l ShouldClose()
+  Declare SetShouldClose(state.l)
   
   ; return mouse x and y coordinate in windows-coordinates - updated after PollEvents()
   Declare.l GetMouseX()
   Declare.l GetMouseY()
+  Declare.f GetMouseXRelative()
+  Declare.f GetMouseYRelative()
   
   ; is mousebutton pressed? sdl::#button_left and so on - updated after PollEvents()
   Declare.l GetMouseButton(x.l)
@@ -47,14 +49,17 @@ DeclareModule window
   ; set WindowTitle
   Declare SetTitle(title.s)
   
+  ; is window resized? Always true for a new window!
+  Declare.l HasResized()
+  
 EndDeclareModule
 
 Module window  
   ; handle every SDL-Event - *userdata is unused
   Declare _WatchEvent(*userdata, *e.sdl::event)
   
-  ; update variables and set gl::viewport
-  Declare _UpdateAspectAndViewport()
+  ; update variables 
+  Declare _UpdateAspect()
   
   ;- structures and globals 
   ; simple mapping for scancodes
@@ -75,10 +80,12 @@ Module window
     UpdateNeeded.l              ; indicates, that the window is moved/resized
     *scan.sdl_scancodes         ; keyboard-handling
     WindowShouldClose.l         ; should quit?
+    WindowHasResized.l          ; window has resized - update viewport
     mousewheel.l                ; mousewheel handling
     mx.l                        ; mouse handling
     my.l
     mbutton.l
+    
   EndStructure
   Global Window.sWindow
   
@@ -96,6 +103,9 @@ Module window
         ProcedureReturn #False
       EndIf
     CompilerEndIf
+    
+    ; enable stencil buffer
+    sdl::GL_SetAttribute(sdl::#GL_STENCIL_SIZE,8)    
     
     ; 4x multisampling for antialiasing
     sdl::GL_SetAttribute(sdl::#GL_MULTISAMPLEBUFFERS,1) 
@@ -143,7 +153,10 @@ Module window
       ProcedureReturn #False
     EndIf
     
-    _UpdateAspectAndViewport()
+    _UpdateAspect()
+    
+    ; should be already on by default...
+    gl::Enable(GL::#MULTISAMPLE)
     
     ProcedureReturn #True
   EndProcedure
@@ -175,7 +188,7 @@ Module window
         
       Case sdl::#WINDOWEVENT
         Select *e\window\event
-          Case sdl::#WINDOWEVENT_RESIZED, sdl::#WINDOWEVENT_MOVED
+          Case sdl::#WINDOWEVENT_RESIZED, sdl::#WINDOWEVENT_SIZE_CHANGED
             Window\UpdateNeeded = #True
             
         EndSelect  
@@ -190,8 +203,6 @@ Module window
   EndProcedure
     
   Procedure.l PollEvents()
-    Protected.l res = #False
-    
     ; reset mousewheel
     Window\mousewheel = 0
     
@@ -201,7 +212,7 @@ Module window
     Static.l fpsframes              ;  frames rendered
     
     fpsframes +1
-    fpstime + sdl::ext_DeltaSeconds(fps_timer,1000); returns seconds since last call - clamp to 1/15 s max
+    fpstime + sdl::ext_DeltaSeconds(fps_timer,1000); returns seconds since last call - clamp to 1000 s max
     
     If fpsframes > 1000 Or fpstime > 1; when one second passed or 1000 frames are rendered, update window-title
       window\fps = " - "+
@@ -218,9 +229,8 @@ Module window
     
     ; window moved/resized?
     If Window\UpdateNeeded 
-      _UpdateAspectAndViewport()
+      _UpdateAspect()
       Window\UpdateNeeded  = #False
-      res = #True
     EndIf
     
     ; get keyboard-status-array
@@ -229,7 +239,6 @@ Module window
     ; get mouse data
     Window\mbutton = sdl::GetMouseState(@Window\mx, @Window\my)
     
-    ProcedureReturn res
   EndProcedure
   
   Procedure.s _CreateTitle(str.s)
@@ -253,20 +262,36 @@ Module window
     ProcedureReturn nb+" "+first+" - "+file  
   EndProcedure
   
-  Procedure SetWindowShouldClose(state.l)
+  Procedure SetShouldClose(state.l)
     Window\WindowShouldClose = state
   EndProcedure
   
-  Procedure.l WindowShouldClose()
+  Procedure.l ShouldClose()
     ProcedureReturn Window\WindowShouldClose
   EndProcedure
   
+  Procedure.l HasResized()
+    If window\WindowHasResized
+      window\WindowHasResized = #False
+      ProcedureReturn #True
+    EndIf
+    ProcedureReturn #False
+  EndProcedure
+    
   Procedure.l GetMouseX()
     ProcedureReturn Window\mx
   EndProcedure
   
   Procedure.l GetMouseY()
     ProcedureReturn Window\my
+  EndProcedure
+  
+  Procedure.f GetMouseXRelative()
+    ProcedureReturn Window\mx / window\w * 2 - 1.0
+  EndProcedure
+  
+  Procedure.f GetMouseYRelative()
+    ProcedureReturn Window\my / window\h * 2 - 1.0
   EndProcedure
   
   Procedure.l GetMouseButton(x.l)
@@ -295,15 +320,21 @@ Module window
     ProcedureReturn window\aspect
   EndProcedure
   
-  Procedure _UpdateAspectAndViewport()
+  Procedure _UpdateAspect()
+    Protected.l w,h
     ; get size
-    sdl::GL_GetDrawableSize(Window\window, @Window\w, @Window\h)
+    sdl::GL_GetDrawableSize(Window\window, @w, @h)
     
-    ; set viewport
-    gl::Viewport(0,0,Window\w,Window\h)
-    
-    ; update aspect
-    Window\aspect = Window\w / Window\h   
+    ; changed?
+    If w <> Window\w Or h <> Window\h
+      window\w = w
+      window\h = h
+      
+      ; update aspect
+      Window\aspect = Window\w / Window\h   
+      
+      window\WindowHasResized = #True
+    EndIf     
   EndProcedure 
   
   Procedure SetTitle(title.s)
@@ -313,8 +344,3 @@ Module window
   
 EndModule
 
-; IDE Options = PureBasic 5.73 LTS (Windows - x64)
-; CursorPosition = 203
-; FirstLine = 185
-; Folding = -----
-; EnableXP

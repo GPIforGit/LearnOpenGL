@@ -48,6 +48,12 @@ DeclareModule camera
   Declare.i GetRight(*camera)
   Declare.i GetUp(*camera)
   
+  ; Return the Angles
+  Declare GetAngle(*camera, *pYaw.float, *pPitch.float)
+  
+  ; Set Angels
+  Declare SetAngle(*camera, Yaw.f, Pitch.f)
+  
 EndDeclareModule
 
 Module camera
@@ -214,10 +220,15 @@ Module camera
   Procedure.i GetUp(*camera.sCamera)
     ProcedureReturn *camera\Up
   EndProcedure
+  
+  Procedure GetAngle(*camera.sCamera, *pYaw.float, *pPitch.float)
+    *pYaw\f = *camera\Yaw
+    *pPitch\f = *camera\Pitch
+  EndProcedure
+  Procedure SetAngle(*camera.sCamera, Yaw.f, Pitch.f)
+    *camera\Yaw = yaw
+    *camera\Pitch = pitch
+    _updateCameraVectors(*camera)
+  EndProcedure
 EndModule
 
-; IDE Options = PureBasic 5.73 LTS (Windows - x64)
-; CursorPosition = 215
-; FirstLine = 38
-; Folding = ---
-; EnableXP

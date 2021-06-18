@@ -6,13 +6,23 @@ DeclareModule model
   EnableExplicit
   
   ; loads a model with supported ASSIMP extensions from file and stores the resulting meshes in the meshes vector.
-  Declare.i new( path.s)
+  Declare.i new( path.s, flags.l = ai::#Process_Triangulate | ai::#Process_GenSmoothNormals | ai::#Process_FlipUVs | ai::#Process_CalcTangentSpace )
+  ; some more interestings flags for simpler handling
+  ;                                  ai::#Process_OptimizeMeshes | ai::#Process_OptimizeGraph | ai::#Process_SortByPType | ai::#Process_FixInfacingNormals |
+  ;                                  ai::#Process_JoinIdenticalVertices 
+  
   
   ; destroy model
   Declare delete( *model ) 
   
   ; draws the model, and thus all its meshes
   Declare Draw( *model, Shader.l)
+  
+  ; draws the model, and thus all its meshes (instanced version
+  Declare DrawInstanced( *model, Shader.l, instancedcount.l)
+  
+  ; Return the mesh-array
+  Declare.i GetMeshArray(*model, *count.long)
   
 EndDeclareModule
 
@@ -25,9 +35,7 @@ Module model
     meshesSize.l    ; size of this array
     directory.s     ; directory where the textures should be
   EndStructure
-  
-  
-  
+      
   ; processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
   ; fills the *mesh-Array
   Declare.i _processNode(*model.sModel, *node.ai::Node, *scene.ai::Scene, *cmesh.sMesh)
@@ -41,16 +49,20 @@ Module model
   ; load the textures and fill the *Texture-Array 
   Declare.i _loadMaterialTextures(*model.sModel, *mat.ai::Material, aiType.l, texType.l, *cTextures.mesh::Texture)
   
+  Procedure.i GetMeshArray(*model.sModel, *count.long)
+    If *count 
+      *count\l = *model\meshesSize
+    EndIf
+    ProcedureReturn *model\meshes
+  EndProcedure  
   
-  Procedure.i new( path.s)
+  Procedure.i new( path.s, flags.l = ai::#Process_Triangulate | ai::#Process_GenSmoothNormals | ai::#Process_FlipUVs | ai::#Process_CalcTangentSpace)
     Protected.sModel *ret
     ; Read file via ASSIMP
     Protected.ai::Scene *scene
     
-    *scene = ai::ImportFile(path,  ai::#Process_Triangulate | ai::#Process_GenSmoothNormals | ai::#Process_FlipUVs | ai::#Process_CalcTangentSpace )
-    ; some more interestings flags for simpler handling
-;                                  ai::#Process_OptimizeMeshes | ai::#Process_OptimizeGraph | ai::#Process_SortByPType | ai::#Process_FixInfacingNormals |
-;                                  ai::#Process_JoinIdenticalVertices )
+    *scene = ai::ImportFile(path,  flags )
+    
     
     ; check for errors
     If *scene=#Null Or *scene\mFlags & ai::#SCENE_FLAGS_INCOMPLETE Or *scene\mRootNode=#Null
@@ -105,6 +117,17 @@ Module model
       *cMesh + SizeOf(sMesh)
     Wend
   EndProcedure  
+  
+  Procedure DrawInstanced( *model.sModel, Shader.l, instancedcount.l)
+    Protected.sMesh *cMesh = *model\meshes
+    
+    ; draw every mesh
+    While *cmesh\i
+      mesh::DrawInstanced( *cmesh\i, shader, instancedcount)
+      *cMesh + SizeOf(sMesh)
+    Wend
+  EndProcedure  
+  
   
   Procedure.l _countNode(*model.sModel, *node.ai::Node)
     Protected.l i
@@ -284,8 +307,3 @@ Module model
 EndModule
 
 
-; IDE Options = PureBasic 5.73 LTS (Windows - x64)
-; CursorPosition = 162
-; FirstLine = 134
-; Folding = --
-; EnableXP
