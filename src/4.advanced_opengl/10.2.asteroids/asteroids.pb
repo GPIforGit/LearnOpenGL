@@ -1,6 +1,6 @@
 ﻿EnableExplicit
 
-; https://learnopengl.com/Model-Loading/Model
+; https://learnopengl.com/Advanced-OpenGL/Instancing
 
 DeclareModule SDL_Config
   ;we want OpenGL-Version 3.3
@@ -17,6 +17,7 @@ XIncludeFile #PB_Compiler_Home + "Include/assimp/assimp.pbi"
 XIncludeFile "../../../common/shaders.pbi"
 XIncludeFile "../../../common/camera.pbi"
 XIncludeFile "../../../common/window.pbi"
+;XIncludeFile "../../../common/texture.pbi"
 XIncludeFile "../../../common/model.pbi"
 
 Declare processInput()
@@ -27,7 +28,7 @@ Declare processInput()
 #SCR_HEIGHT = 600
 
 ; camera
-Global *camera = camera::new_float(1,1,5)
+Global *camera = camera::new_float(0,3,70)
 Global.f lastX =  #SCR_WIDTH / 2.0
 Global.f lastY = #SCR_HEIGHT / 2.0
 Global.l firstMouse = #True
@@ -46,18 +47,47 @@ Procedure main()
   ; configure global opengl state
   ; -----------------------------
   gl::Enable(GL::#DEPTH_TEST)
+  ;gl::enable(gl::#CULL_FACE)
   
-  ; build and compile our shader program
-  ; ------------------------------------
-  Protected.l ourShader = shader::new("model_loading.vs", "model_loading.fs")
+  ; build and compile shaders
+  ; -------------------------
+  Protected.l Shader = shader::new("instancing.vs", "instancing.fs")
   
   ; load models
   ; -----------
-  Protected  *ourModel = model::new( "../../../resources/objects/backpack/backpack.obj")
+  Protected.i rock = model::new("../../../resources/objects/rock/rock.obj", ai::#Process_Triangulate | ai::#Process_GenSmoothNormals | ai::#Process_CalcTangentSpace) ; remove | ai::#Process_FlipUVs
+  Protected.i planet = model::new("../../../resources/objects/planet/planet.obj", ai::#Process_Triangulate | ai::#Process_GenSmoothNormals | ai::#Process_CalcTangentSpace) ; remove | ai::#Process_FlipUVs
   
-  ; draw in wireframe
-  ; gl::PolygonMode(GL::#FRONT_AND_BACK, GL::#LINE)
-  
+  ; generate a large list of semi-random model transformation matrices
+  ; ------------------------------------------------------------------
+  Protected.l amount = 1000
+  Dim modelMatrices.math::mat4x4(amount-1)
+  Protected.f radius = 50.0
+  Protected.f offset = 2.5
+  Protected.l i
+  For i=0 To amount -1
+    Protected.math::mat4x4 *model = @modelMatrices(i)
+    
+    math::Mat4x4_set_Scalar( *model, 1 )
+    
+    ; 1. translation: displace along circle with 'radius' in range [-offset, offset]
+    Protected.f angle = i / amount * 360.0
+    Protected.f displacement = Random(2 * offset * 100 -1, 0) / 100.0 - offset
+    Protected.f x = Sin(angle) * radius + displacement
+    displacement = Random(2 * offset * 100 -1, 0) / 100.0 - offset
+    Protected.f y = displacement * 0.4; keep height of asteroid field smaller compared to width of x and z
+    displacement = Random(2 * offset * 100 -1, 0) / 100.0 - offset
+    Protected.f z = Cos(angle) * radius + displacement
+    math::translate_float( *model, *model, x,y,z)
+    
+    ; 2. scale: Scale between 0.05 and 0.25f
+    Protected.f scale = Random(20-1,0) / 100.0 + 0.05
+    math::scale_float( *model, *model, scale, scale, scale)
+
+    ; 3. rotation: add random rotation around a (semi)randomly picked rotation axis vector
+    Protected.f rotAngle = Random(360)
+    math::rotate_float( *model, *model, Radian(rotAngle), 0.4, 0.6, 0.8)
+  Next
     
   ;- render loop  
   ;  -----------
@@ -74,36 +104,37 @@ Procedure main()
     ; window size changed
     ; -------------------
     If window::HasResized()
-      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())      
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())                  
     EndIf
     
     ; render
     ; ------
     
-    gl::ClearColor(0.5, 0.5, 0.5, 1.0)
+    gl::ClearColor(0.1, 0.1, 0.1, 1.0)
     gl::Clear(GL::#COLOR_BUFFER_BIT | GL::#DEPTH_BUFFER_BIT)
     
-    ; don't forget to enable shader before setting uniforms
-    shader::use( ourShader )
+    ; configure transformation matrices
+    Protected.math::Mat4x4 projection, *view
+    math::perspective(projection, Radian( camera::GetZoom(*camera)), window::GetAspect(), 1.0, 1000.0)
+    *view = camera::GetViewMatrix(*camera)
     
+    shader::use(shader)
+    shader::setMat4x4(shader, "projection", projection)
+    shader::setMat4x4(shader, "view", *view)
     
-    ; view/projection transformations    
-    Protected.math::mat4x4 projection
-    math::perspective(projection, Radian(camera::GetZoom(*camera)), window::GetAspect(), 0.1, 100.0)
-    
-    Protected.math::mat4x4 *view = camera::GetViewMatrix(*camera)
-    
-    shader::setMat4x4(ourShader, "projection", projection)
-    shader::setMat4x4(ourShader, "view", *view)
-    
-    ; render the loaded model
+    ; draw planet
     Protected.math::mat4x4 model
-    math::Mat4x4_set_Scalar(model, 1)
-    math::translate_float(model, model, 0.0, 0.0, 0.0);  translate it down so it's at the center of the scene
-    math::scale_float(model, model, 1.0, 1.0, 1.0);	 it's a bit too big for our scene, so scale it down
-    shader::setMat4x4(ourShader, "model", model);
-    model::Draw(*ourModel, ourShader)
+    math::Mat4x4_set_Scalar( model, 1)
+    math::translate_float( model, model, 0.0, -3.0, 0.0)
+    math::scale_float( model, model , 4.0, 4.0, 4.0)
+    shader::setMat4x4(shader, "model", model)
+    model::Draw(planet, shader)
     
+    ; draw meteorites
+    For i=0 To amount -1
+      shader::setMat4x4(shader, "model", modelMatrices(i))
+      model::Draw(rock, shader)
+    Next
     
     ; Swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
     ; -------------------------------------------------------------------------
@@ -114,9 +145,12 @@ Procedure main()
   
   ; optional: de-allocate all resources once they've outlived their purpose:
   ; ------------------------------------------------------------------------
-
-  shader::Delete(ourShader)  
-  model::delete(*ourModel):*ourModel = #Null
+  
+  model::delete(rock)
+  model::delete(planet)
+  
+  shader::Delete(Shader)  
+  
   camera::delete(*camera):*camera = #Null
   
   ; terminate, clearing all previously allocated resources
@@ -179,12 +213,13 @@ Procedure processInput()
     firstMouse = #True ; restart relative
   EndIf
   
-  If window::GetMouseWheelY()
-    camera::ProcessMouseScroll( *camera, window::GetMouseWheelY() )
-  EndIf
+    If window::GetMouseWheelY()
+      camera::ProcessMouseScroll( *camera, window::GetMouseWheelY() )
+    EndIf
   
   
 EndProcedure
+
 
 
 

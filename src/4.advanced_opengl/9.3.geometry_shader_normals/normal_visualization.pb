@@ -1,6 +1,6 @@
 ﻿EnableExplicit
 
-; https://learnopengl.com/Model-Loading/Model
+; https://learnopengl.com/Advanced-OpenGL/Geometry-Shader
 
 DeclareModule SDL_Config
   ;we want OpenGL-Version 3.3
@@ -17,6 +17,7 @@ XIncludeFile #PB_Compiler_Home + "Include/assimp/assimp.pbi"
 XIncludeFile "../../../common/shaders.pbi"
 XIncludeFile "../../../common/camera.pbi"
 XIncludeFile "../../../common/window.pbi"
+;XIncludeFile "../../../common/texture.pbi"
 XIncludeFile "../../../common/model.pbi"
 
 Declare processInput()
@@ -27,7 +28,7 @@ Declare processInput()
 #SCR_HEIGHT = 600
 
 ; camera
-Global *camera = camera::new_float(1,1,5)
+Global *camera = camera::new_float(0,0,3)
 Global.f lastX =  #SCR_WIDTH / 2.0
 Global.f lastY = #SCR_HEIGHT / 2.0
 Global.l firstMouse = #True
@@ -47,18 +48,15 @@ Procedure main()
   ; -----------------------------
   gl::Enable(GL::#DEPTH_TEST)
   
-  ; build and compile our shader program
-  ; ------------------------------------
-  Protected.l ourShader = shader::new("model_loading.vs", "model_loading.fs")
+  ; build and compile shaders
+  ; -------------------------
+  Protected.l Shader = shader::new("default.vs", "default.fs")
+  Protected.l normalShader = shader::new("normal_visualization.vs", "normal_visualization.fs", "normal_visualization.gs")
   
   ; load models
   ; -----------
-  Protected  *ourModel = model::new( "../../../resources/objects/backpack/backpack.obj")
+  Protected.i backpack = model::new("../../../resources/objects/backpack/backpack.obj")
   
-  ; draw in wireframe
-  ; gl::PolygonMode(GL::#FRONT_AND_BACK, GL::#LINE)
-  
-    
   ;- render loop  
   ;  -----------
   While Not window::ShouldClose()
@@ -74,36 +72,36 @@ Procedure main()
     ; window size changed
     ; -------------------
     If window::HasResized()
-      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())      
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())                  
     EndIf
     
     ; render
     ; ------
     
-    gl::ClearColor(0.5, 0.5, 0.5, 1.0)
+    gl::ClearColor(0.1, 0.1, 0.1, 1.0)
     gl::Clear(GL::#COLOR_BUFFER_BIT | GL::#DEPTH_BUFFER_BIT)
     
-    ; don't forget to enable shader before setting uniforms
-    shader::use( ourShader )
+    ; configure transformation matrices
+    Protected.math::Mat4x4 projection, *view, model
+    math::perspective(projection, Radian( camera::GetZoom(*camera)), window::GetAspect(), 1.0, 100.0)
+    *view = camera::GetViewMatrix(*camera)
+    math::Mat4x4_set_Scalar(model, 1.0)
     
+    shader::use(shader)
+    shader::setMat4x4(shader, "projection", projection)
+    shader::setMat4x4(shader, "view", *view)
+    shader::setMat4x4(shader, "model", model)
     
-    ; view/projection transformations    
-    Protected.math::mat4x4 projection
-    math::perspective(projection, Radian(camera::GetZoom(*camera)), window::GetAspect(), 0.1, 100.0)
+    ; draw model as usual
+    model::draw(backpack, shader)
     
-    Protected.math::mat4x4 *view = camera::GetViewMatrix(*camera)
+    ; then draw model with normal visualizing geometry shader
+    shader::use(normalShader)
+    shader::setMat4x4(normalShader, "projection", projection)
+    shader::setMat4x4(normalShader, "view", *view)
+    shader::setMat4x4(normalShader, "model", model)
     
-    shader::setMat4x4(ourShader, "projection", projection)
-    shader::setMat4x4(ourShader, "view", *view)
-    
-    ; render the loaded model
-    Protected.math::mat4x4 model
-    math::Mat4x4_set_Scalar(model, 1)
-    math::translate_float(model, model, 0.0, 0.0, 0.0);  translate it down so it's at the center of the scene
-    math::scale_float(model, model, 1.0, 1.0, 1.0);	 it's a bit too big for our scene, so scale it down
-    shader::setMat4x4(ourShader, "model", model);
-    model::Draw(*ourModel, ourShader)
-    
+    model::draw(backpack, normalShader)
     
     ; Swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
     ; -------------------------------------------------------------------------
@@ -114,9 +112,12 @@ Procedure main()
   
   ; optional: de-allocate all resources once they've outlived their purpose:
   ; ------------------------------------------------------------------------
-
-  shader::Delete(ourShader)  
-  model::delete(*ourModel):*ourModel = #Null
+  
+  model::delete(backpack)
+  
+  shader::Delete(Shader)  
+  shader::delete(normalShader)
+  
   camera::delete(*camera):*camera = #Null
   
   ; terminate, clearing all previously allocated resources
@@ -185,6 +186,7 @@ Procedure processInput()
   
   
 EndProcedure
+
 
 
 

@@ -1,6 +1,8 @@
 ﻿EnableExplicit
 
-; https://learnopengl.com/Model-Loading/Model
+; https://learnopengl.com/Advanced-OpenGL/Anti-Aliasing
+
+; changes: Press m for enable/disable msaa
 
 DeclareModule SDL_Config
   ;we want OpenGL-Version 3.3
@@ -13,11 +15,12 @@ EndDeclareModule
 XIncludeFile #PB_Compiler_Home + "Include/sdl2/SDL.pbi"
 XIncludeFile #PB_Compiler_Home + "Include/sdl2/opengl.pbi"
 XIncludeFile #PB_Compiler_Home + "Include/math/math.pbi"
-XIncludeFile #PB_Compiler_Home + "Include/assimp/assimp.pbi"
+;XIncludeFile #PB_Compiler_Home + "Include/assimp/assimp.pbi"
 XIncludeFile "../../../common/shaders.pbi"
 XIncludeFile "../../../common/camera.pbi"
 XIncludeFile "../../../common/window.pbi"
-XIncludeFile "../../../common/model.pbi"
+;XIncludeFile "../../../common/texture.pbi"
+;XIncludeFile "../../../common/model.pbi"
 
 Declare processInput()
 
@@ -27,7 +30,7 @@ Declare processInput()
 #SCR_HEIGHT = 600
 
 ; camera
-Global *camera = camera::new_float(1,1,5)
+Global *camera = camera::new_float(0,0,3)
 Global.f lastX =  #SCR_WIDTH / 2.0
 Global.f lastY = #SCR_HEIGHT / 2.0
 Global.l firstMouse = #True
@@ -46,19 +49,68 @@ Procedure main()
   ; configure global opengl state
   ; -----------------------------
   gl::Enable(GL::#DEPTH_TEST)
+  ;gl::enable(gl::#CULL_FACE)
+  gl::Disable(GL::#MULTISAMPLE)
+
   
-  ; build and compile our shader program
-  ; ------------------------------------
-  Protected.l ourShader = shader::new("model_loading.vs", "model_loading.fs")
+  ; build and compile shaders
+  ; -------------------------
+  Protected.l Shader = shader::new("anti_aliasing.vs", "anti_aliasing.fs")
   
-  ; load models
-  ; -----------
-  Protected  *ourModel = model::new( "../../../resources/objects/backpack/backpack.obj")
+  ; set up vertex data (and buffer(s)) and configure vertex attributes
+  ; ------------------------------------------------------------------
+  DataSection
+    cubeVertices:
+    ; positions       
+    Data.f -0.5, -0.5, -0.5, ;1
+           0.5, -0.5, -0.5,
+           0.5,  0.5, -0.5,
+           0.5,  0.5, -0.5,
+           -0.5,  0.5, -0.5,
+           -0.5, -0.5, -0.5,
+           -0.5, -0.5,  0.5, ;2
+           0.5, -0.5,  0.5,
+           0.5,  0.5,  0.5,
+           0.5,  0.5,  0.5,
+           -0.5,  0.5,  0.5,
+           -0.5, -0.5,  0.5,
+           -0.5,  0.5,  0.5, ;3
+           -0.5,  0.5, -0.5,
+           -0.5, -0.5, -0.5,
+           -0.5, -0.5, -0.5,
+           -0.5, -0.5,  0.5,
+           -0.5,  0.5,  0.5,
+           0.5,  0.5,  0.5, ;4
+           0.5,  0.5, -0.5,
+           0.5, -0.5, -0.5,
+           0.5, -0.5, -0.5,
+           0.5, -0.5,  0.5,
+           0.5,  0.5,  0.5,
+           -0.5, -0.5, -0.5, ;5
+           0.5, -0.5, -0.5,
+           0.5, -0.5,  0.5,
+           0.5, -0.5,  0.5,
+           -0.5, -0.5,  0.5,
+           -0.5, -0.5, -0.5,
+           -0.5,  0.5, -0.5, ;6
+           0.5,  0.5, -0.5,
+           0.5,  0.5,  0.5,
+           0.5,  0.5,  0.5,
+           -0.5,  0.5,  0.5,
+           -0.5,  0.5, -0.5
+    cubeVerticesEnd:
+  EndDataSection
   
-  ; draw in wireframe
-  ; gl::PolygonMode(GL::#FRONT_AND_BACK, GL::#LINE)
+  ; setup cube VAO
+  Protected.l cubeVAO, cubeVBO
+  gl::GenVertexArrays(1, @cubeVAO)
+  gl::GenBuffers(1, @cubeVBO)
+  gl::BindVertexArray(cubeVAO);
+  gl::BindBuffer(GL::#ARRAY_BUFFER, cubeVBO);
+  gl::BufferData(GL::#ARRAY_BUFFER, ?cubeVerticesEnd - ?cubeVertices, ?cubeVertices, GL::#STATIC_DRAW)
+  gl::EnableVertexAttribArray(0)
+  gl::VertexAttribPointer(0, 3, GL::#FLOAT, GL::#False, 3 * SizeOf(float), 0)
   
-    
   ;- render loop  
   ;  -----------
   While Not window::ShouldClose()
@@ -74,36 +126,25 @@ Procedure main()
     ; window size changed
     ; -------------------
     If window::HasResized()
-      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())      
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())                  
     EndIf
     
     ; render
     ; ------
     
-    gl::ClearColor(0.5, 0.5, 0.5, 1.0)
+    gl::ClearColor(0.1, 0.1, 0.1, 1.0)
     gl::Clear(GL::#COLOR_BUFFER_BIT | GL::#DEPTH_BUFFER_BIT)
     
-    ; don't forget to enable shader before setting uniforms
-    shader::use( ourShader )
-    
-    
-    ; view/projection transformations    
+    ; set transformation matrices		
+    shader::use(shader)
     Protected.math::mat4x4 projection
-    math::perspective(projection, Radian(camera::GetZoom(*camera)), window::GetAspect(), 0.1, 100.0)
+    math::perspective(projection, Radian(camera::GetZoom(*camera)), window::GetAspect(), 0.1, 1000.0)
+    shader::setMat4x4(shader, "projection", projection)
+    shader::setMat4x4(shader, "view", camera::GetViewMatrix(*camera))
+    shader::setMat4x4(shader, "model", math::m4_1)
     
-    Protected.math::mat4x4 *view = camera::GetViewMatrix(*camera)
-    
-    shader::setMat4x4(ourShader, "projection", projection)
-    shader::setMat4x4(ourShader, "view", *view)
-    
-    ; render the loaded model
-    Protected.math::mat4x4 model
-    math::Mat4x4_set_Scalar(model, 1)
-    math::translate_float(model, model, 0.0, 0.0, 0.0);  translate it down so it's at the center of the scene
-    math::scale_float(model, model, 1.0, 1.0, 1.0);	 it's a bit too big for our scene, so scale it down
-    shader::setMat4x4(ourShader, "model", model);
-    model::Draw(*ourModel, ourShader)
-    
+    gl::BindVertexArray(cubeVAO)
+    gl::DrawArrays(GL::#TRIANGLES, 0, 36)
     
     ; Swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
     ; -------------------------------------------------------------------------
@@ -114,9 +155,12 @@ Procedure main()
   
   ; optional: de-allocate all resources once they've outlived their purpose:
   ; ------------------------------------------------------------------------
-
-  shader::Delete(ourShader)  
-  model::delete(*ourModel):*ourModel = #Null
+  
+  gl::DeleteVertexArrays(1, @cubeVAO)
+  gl::DeleteBuffers(1, @cubeVBO)
+  
+  shader::Delete(Shader)  
+  
   camera::delete(*camera):*camera = #Null
   
   ; terminate, clearing all previously allocated resources
@@ -131,6 +175,21 @@ Procedure processInput()
   If window::GetKey( sdl::#SCANCODE_ESCAPE )
     window::SetShouldClose( #True )
   EndIf   
+  
+  Static.l pressedM
+  If window::GetKey(sdl::#SCANCODE_M)
+    If Not pressedM
+      pressedM = #True
+      If gl::IsEnabled (gl::#MULTISAMPLE)        
+        gl::Disable(gl::#MULTISAMPLE)
+      Else
+        gl::Enable(gl::#MULTISAMPLE)
+      EndIf
+    EndIf
+  Else
+    pressedM = #False
+  EndIf
+  
   
   Protected.f cameraSpeed = 2.5 * deltaTime 
   Protected.math::vec3 tmp
@@ -185,6 +244,7 @@ Procedure processInput()
   
   
 EndProcedure
+
 
 
 
