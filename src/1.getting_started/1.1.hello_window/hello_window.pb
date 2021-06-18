@@ -5,7 +5,7 @@
 ; changes
 ; We use here SDL instead of glad and glfw3
 ; initalizing and exiting SDL and OpenGL are in the module window
-; framebuffer_size_callback is removed
+; framebuffer_size_callback is replaced with window::HasResized()
 ; the GL-Version is set in the module SDL_Config
 ; add fps-counter in module window
 
@@ -39,12 +39,18 @@ Procedure main()
   
   ;- render loop  
   ;  -----------
-  While Not window::WindowShouldClose()
-            
+  While Not window::ShouldClose()
+                
     ; input
     ; -----
     processInput()
-        
+    
+    ; window size changed
+    ; -------------------
+    If window::HasResized()
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())
+    EndIf
+    
     ;- rendering commands here
 				
     ; Swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -64,8 +70,9 @@ main()
 ; ----------------------------------------------------------------------------------------------------
 Procedure processInput()
   If window::GetKey( sdl::#SCANCODE_ESCAPE )
-    window::SetWindowShouldClose( #True )
+    window::SetShouldClose( #True )
   EndIf   
 EndProcedure
+
 
 

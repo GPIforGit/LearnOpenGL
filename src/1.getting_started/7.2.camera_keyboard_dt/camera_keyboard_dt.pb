@@ -206,15 +206,9 @@ Procedure main()
   Protected.l viewLoc       = gl::GetUniformLocation(ourShader, "view")
   Protected.l projectionLoc = gl::GetUniformLocation(ourShader, "projection")
   
-  ; pass projection matrix to shader (as projection matrix rarely changes there's no need to do this per frame)
-  ; -----------------------------------------------------------------------------------------------------------
-  Protected.math::mat4x4 projection
-  math::perspective(projection, Radian(45.0), window::GetAspect(), 0.1, 100.0) ; note, when you resize the window you should update the projection matrix!
-  gl::UniformMatrix4fv(projectionLoc, 1, #False, projection)  
-  
   ;- render loop  
   ;  -----------
-  While Not window::WindowShouldClose()
+  While Not window::ShouldClose()
     
     ; per-frame time logic
     ; --------------------
@@ -223,6 +217,18 @@ Procedure main()
     ; input
     ; -----
     processInput(deltaTime)
+    
+    ; window size changed
+    ; -------------------
+    If window::HasResized()
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())
+      
+      ; pass projection matrix to shader (as projection matrix rarely changes there's no need to do this per frame)
+      ; -----------------------------------------------------------------------------------------------------------
+      Protected.math::mat4x4 projection
+      math::perspective(projection, Radian(45.0), window::GetAspect(), 0.1, 100.0) ; note, when you resize the window you should update the projection matrix!
+      gl::UniformMatrix4fv(projectionLoc, 1, #False, projection)  
+    EndIf
     
     ; render
     ; ------
@@ -287,7 +293,7 @@ main()
 ; ----------------------------------------------------------------------------------------------------
 Procedure processInput(deltaTime.d)
   If window::GetKey( sdl::#SCANCODE_ESCAPE )
-    window::SetWindowShouldClose( #True )
+    window::SetShouldClose( #True )
   EndIf   
   
   Protected.f cameraSpeed = 2.5 * deltaTime 
@@ -316,5 +322,6 @@ Procedure processInput(deltaTime.d)
   
   
 EndProcedure
+
 
 

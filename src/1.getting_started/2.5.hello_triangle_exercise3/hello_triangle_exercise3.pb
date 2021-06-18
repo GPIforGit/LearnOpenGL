@@ -2,8 +2,6 @@
 
 ; https://learnopengl.com/Getting-started/Hello-Triangle
 
-; changes
-
 DeclareModule SDL_Config
   ;we want OpenGL-Version 3.3
   #GL_MAJOR_VERSION = 3
@@ -150,10 +148,16 @@ Procedure main()
     
   ;- render loop  
   ;  -----------
-  While Not window::WindowShouldClose()
+  While Not window::ShouldClose()
     ; input
     ; -----
     processInput()
+    
+    ; window size changed
+    ; -------------------
+    If window::HasResized()
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())
+    EndIf
     
     ; render
     ; ------
@@ -199,8 +203,9 @@ main()
 ; ----------------------------------------------------------------------------------------------------
 Procedure processInput()
   If window::GetKey( sdl::#SCANCODE_ESCAPE )
-    window::SetWindowShouldClose( #True )
+    window::SetShouldClose( #True )
   EndIf   
 EndProcedure
+
 
 

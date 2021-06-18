@@ -34,11 +34,17 @@ Procedure main()
   
   ;- render loop  
   ;  -----------
-  While Not window::WindowShouldClose()
-    
+  While Not window::ShouldClose()
+        
     ; input
     ; -----
     processInput()
+    
+    ; window size changed
+    ; -------------------
+    If window::HasResized()
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())
+    EndIf
     
     ; render
     gl::ClearColor(0.2, 0.3, 0.3, 1.0)
@@ -59,7 +65,8 @@ main()
 ; process all input: query whether relevant keys are pressed/released this frame and react accordingly
 Procedure processInput()
   If window::GetKey( sdl::#SCANCODE_ESCAPE )
-    window::SetWindowShouldClose( #True )
+    window::SetShouldClose( #True )
   EndIf   
 EndProcedure
+
 
