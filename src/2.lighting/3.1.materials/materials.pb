@@ -128,7 +128,7 @@ Procedure main()
   
   ;- render loop  
   ;  -----------
-  While Not window::WindowShouldClose()
+  While Not window::ShouldClose()
     
     ; per-frame time logic (limited to 1/15 seconds)
     ; ----------------------------------------------
@@ -137,6 +137,12 @@ Procedure main()
     ; input
     ; -----
     processInput()
+    
+    ; window size changed
+    ; -------------------
+    If window::HasResized()
+      gl::Viewport(0,0, window::GetWidth(), window::GetHeight())      
+    EndIf
     
     ; render
     ; ------
@@ -226,7 +232,7 @@ main()
 ; ----------------------------------------------------------------------------------------------------
 Procedure processInput()
   If window::GetKey( sdl::#SCANCODE_ESCAPE )
-    window::SetWindowShouldClose( #True )
+    window::SetShouldClose( #True )
   EndIf   
   
   Protected.f cameraSpeed = 2.5 * deltaTime 
@@ -282,5 +288,6 @@ Procedure processInput()
   
   
 EndProcedure
+
 
 
